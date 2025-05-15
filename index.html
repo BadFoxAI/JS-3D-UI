@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JS-3D-UI - Tech Demo</title>
+    <title>JS-3D-UI</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; }
         canvas { display: block; }
@@ -25,228 +24,1219 @@
     </script>
 </head>
 <body>
-    <div id="info">JS-3D-UI - Tech Demo</div>
+    <div id="info">JS-3D-UI Initializing...</div>
 
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
-        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        // XRControllerModelFactory is imported but not actively used in this version.
+        // It would be used if XR controller models were rendered.
+        // import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // --- Global Configuration ---
+        // --- Core Configuration ---
+
+        /** Factor by which to scale UI element dimensions for canvas texture resolution. Higher is sharper. */
         const RESOLUTION_FACTOR = 100;
+
+        /**
+         * Default styling for all UI elements.
+         * Individual elements or themes can override these properties.
+         */
         const GLOBAL_DEFAULT_STYLE = {
-            fontFamily: 'Arial', fontSize: 36, textColor: '#FFFFFF',
-            backgroundColor: '#007bff', hoverBackgroundColor: '#0056b3',
-            focusBackgroundColor: '#003c7a', activeBackgroundColor: '#002752',
-            textInputFocusColor: '#004494', placeholderTextColor: '#BBBBBB',
-            width: 2.5, height: 0.5, itemSpacing: 0.1,
-            textAlign: 'center', verticalAlign: 'middle',
-            padding: 0.05,
+            fontFamily: 'Arial',
+            fontSize: 36, // in pixels for the 2D canvas texture
+            textColor: '#FFFFFF',
+            backgroundColor: '#007bff',
+            hoverBackgroundColor: '#0056b3',
+            focusBackgroundColor: '#003c7a',
+            activeBackgroundColor: '#002752', // Color when an element is actively pressed
+            textInputFocusColor: '#004494', // Specific background for focused text inputs
+            placeholderTextColor: '#BBBBBB',
+            width: 2.5,         // in 3D scene units
+            height: 0.5,        // in 3D scene units
+            itemSpacing: 0.1,   // Spacing between items in a layout (e.g., vertical menu)
+            textAlign: 'center',
+            verticalAlign: 'middle',
+            padding: 0.05,      // Uniform padding, or an object {top, right, bottom, left}
         };
+
+        /** Interval in milliseconds for the text input cursor blink. */
         const BLINK_INTERVAL = 530;
 
-        // --- THEMES constant (even if not fully used by Menu constructor yet) ---
+        /** Predefined themes for UI appearance. */
         const THEMES = {
-            default: { /* ... can be same as GLOBAL_DEFAULT_STYLE or slightly different ... */
-                fontFamily: 'Arial', fontSize: 36, textColor: '#FFFFFF',
-                backgroundColor: '#007bff', hoverBackgroundColor: '#0056b3',
-                focusBackgroundColor: '#003c7a', activeBackgroundColor: '#002752',
-                textInputFocusColor: '#004494', placeholderTextColor: '#BBBBBB',
+            default: {
+                fontFamily: 'Arial',
+                fontSize: 36,
+                textColor: '#FFFFFF',
+                backgroundColor: '#007bff',
+                hoverBackgroundColor: '#0056b3',
+                focusBackgroundColor: '#003c7a',
+                activeBackgroundColor: '#002752',
+                textInputFocusColor: '#004494',
+                placeholderTextColor: '#BBBBBB',
             },
-            darkDebug: { fontFamily: 'Courier New, monospace', fontSize: 30, fontColor: '#00FF00', backgroundColor: '#101010', hoverColor: '#303000', activeColor: '#505000', textInputFocusColor: '#005500', placeholderTextColor: '#008800',}
+            darkDebug: {
+                fontFamily: 'Courier New, monospace',
+                fontSize: 30,
+                textColor: '#00FF00', // Renamed from fontColor for consistency
+                backgroundColor: '#101010',
+                hoverBackgroundColor: '#303000', // Renamed from hoverColor
+                activeBackgroundColor: '#505000', // Renamed from activeColor
+                textInputFocusColor: '#005500',
+                placeholderTextColor: '#008800',
+            }
         };
 
-
-        // --- Menu Definition (Global Scope) ---
-        const testMenuDefinition = {
-            id: 'mainTestMenu',
-            type: 'panel',
-            position: new THREE.Vector3(0, 1.5, 0),
-            style: { itemSpacing: 0.15, width: 3.2 }, // Style for the menu itself
+        // --- Sample Menu Definition ---
+        /**
+         * Defines the structure and content of a sample menu.
+         * This object is used by the MenuManager to construct a Menu instance.
+         */
+        const sampleMenuDefinition = {
+            id: 'sampleMenu',
+            type: 'panel', // Currently informational, actual rendering is a group of items
+            position: new THREE.Vector3(0, 1.5, 0), // Initial position of the menu in the 3D scene
+            style: { itemSpacing: 0.15, width: 3.2 }, // Overrides for menu-level layout defaults
             items: [
-                { name: "title", type: 'textlabel', text: "UI Test Menu (Iter 0.7)", style: { height: 0.3, fontSize: 40, backgroundColor: '#333', hoverBackgroundColor:'#333' } },
-                { name: "nameField", type: 'text_input', value: "Test User", placeholder: "Enter Name", style: {width:3, height:0.5, fontSize:40}},
-                { name: "btnConfirm", type: 'button', text: "Log Name",
-                  actionKey: "logNameAction",
-                  style: { width: 2, height: 0.4}
+                {
+                    name: "titleLabel",
+                    type: 'textlabel',
+                    text: "JS-3D-UI Demo",
+                    style: { height: 0.3, fontSize: 40, backgroundColor: '#333333', hoverBackgroundColor: '#333333' }
+                },
+                {
+                    name: "nameInput",
+                    type: 'text_input',
+                    value: "DefaultUser",
+                    placeholder: "Enter your name",
+                    style: { width: 3, height: 0.5, fontSize: 38 }
+                },
+                {
+                    name: "submitButton",
+                    type: 'button',
+                    text: "Submit Name",
+                    actionKey: "submitNameAction", // Links to a registered action in MenuManager
+                    style: { width: 2, height: 0.4 }
                 }
             ]
         };
 
 
-        // --- Global State ---
-        let scene, camera, renderer, controls;
-        let raycaster, mouse;
-        let interactiveElements = []; // Note: UIElement3D.dispose manages this for its own mesh. Menu system might need its own tracking for raycasting targets.
-        let hoveredElement = null; // Managed by interaction handlers
-        // let focusedElement = null; // Now primarily managed by menuManager.focusedItem
-        let activeElement = null; // Managed by interaction handlers
-        let blinkTimer = null;
-        let cursorVisible = true;
+        // --- Global State Variables ---
+        let scene, camera, renderer, orbitControls;
         let menuManager;
-        // let mouseInteractionHandler, xrInteractionHandler; // Initialized in init()
+        let blinkTimer = null;        // Timer for text input cursor blinking
+        let cursorVisible = true;     // Current visibility state of the text input cursor
 
 
-        // --- UIElement3D Base Class ---
+        /**
+         * Base class for all 3D UI elements.
+         * Handles common properties like ID, style, mesh, and basic interaction states.
+         * Subclasses must implement `createMesh`.
+         */
         class UIElement3D {
-            constructor(config = {}) { this.id = config.name || `uiElement_${THREE.MathUtils.generateUUID()}`; this.mesh = null; this.style = { ...GLOBAL_DEFAULT_STYLE, ...config.styleFromMenu, ...config.style }; if (typeof this.style.padding === 'number') { this.style.padding = { top: this.style.padding, right: this.style.padding, bottom: this.style.padding, left: this.style.padding }; } else { const pVal = (typeof GLOBAL_DEFAULT_STYLE.padding === 'number') ? GLOBAL_DEFAULT_STYLE.padding : 0.05; this.style.padding = { top: this.style.padding?.top ?? pVal, right: this.style.padding?.right ?? pVal, bottom: this.style.padding?.bottom ?? pVal, left: this.style.padding?.left ?? pVal };} this.userData = { config: config, isHovered: false, isFocused: false, isActive: false, uiElementInstance: this }; this.type = config.type || 'uibase'; this.visible = true; this.renderer = config.renderer; this.menuManager = config.menuManager; }
-            createMesh() { throw new Error(`UIElement3D (${this.id}): createMesh() must be implemented by subclass.`); }
-            updateAppearance(newBgColor, newTextColor = null, newText = null, showCursor = false) { if (this.mesh && this.mesh.userData.updateTextureMethod) { this.mesh.userData.updateTextureMethod(newBgColor, newTextColor, newText, showCursor); } else if (this.mesh && this.mesh.material && this.mesh.material.color && newBgColor) { this.mesh.material.color.set(newBgColor);}}
-            onHover() { if (!this.visible || this.userData.isFocused || this.userData.isActive) return; this.userData.isHovered = true; this.updateAppearance(this.style.hoverBackgroundColor); }
-            onUnhover() { if(!this.visible) return; this.userData.isHovered = false; if (this.userData.isFocused) { this.updateAppearance(this.style.focusBackgroundColor, null, null, this.type === 'text_input' ? cursorVisible : false); } else if (this.userData.isActive) { this.updateAppearance(this.style.activeBackgroundColor); } else { this.updateAppearance(this.style.backgroundColor); } }
-            onClick() { this.setFocus(true); }
-            onMouseDown() {} onMouseUp() {}
-            onKeyDown(event) { console.log(`Key '${event.key}' (UIElement3D default handler) on focused ${this.id}`);}
-            setFocus(focused) { if (!this.menuManager) { console.warn("UIElement3D: menuManager is not set for focus management on element " + this.id); return; } if (this.userData.isFocused === focused) return; this.userData.isFocused = focused; this.userData.isHovered = false; if (this.userData.isFocused) { if (this.menuManager.focusedItem && this.menuManager.focusedItem !== this) { this.menuManager.focusedItem.setFocus(false); } this.menuManager.focusedItem = this; this.updateAppearance(this.style.focusBackgroundColor, null, null, this.type === 'text_input' ? cursorVisible : false); console.log(`Focused: ${this.id}`); if (this.type === 'text_input') startBlinkingCursor(); } else { if (this.menuManager.focusedItem === this) { this.menuManager.focusedItem = null; } if (this.type === 'text_input') stopBlinkingCursor(); this.updateAppearance(this.style.backgroundColor); console.log(`Unfocused: ${this.id}`); } }
-            dispose() { if (this.mesh) { if (this.mesh.geometry) this.mesh.geometry.dispose(); if (this.mesh.material) { if (this.mesh.material.map && this.mesh.material.map.dispose) this.mesh.material.map.dispose(); if(this.mesh.material.dispose) this.mesh.material.dispose(); } if (this.mesh.parent) this.mesh.parent.remove(this.mesh); this.mesh = null;} const index = interactiveElements.indexOf(this.mesh); if (index > -1) interactiveElements.splice(index, 1); if (hoveredElement === this) hoveredElement = null; if (this.menuManager && this.menuManager.focusedItem === this) {this.menuManager.focusedItem = null; if (this.type === 'text_input') stopBlinkingCursor();} if (activeElement === this) activeElement = null; } // interactiveElements.indexOf(this.mesh) might be intended
+            /**
+             * @param {object} config - Configuration object for the UI element.
+             * @param {string} [config.name] - A unique identifier for the element.
+             * @param {object} [config.style] - Custom styles to override defaults.
+             * @param {object} [config.styleFromMenu] - Styles inherited from the parent menu.
+             * @param {MenuManager} config.menuManager - Reference to the menu manager.
+             */
+            constructor(config = {}) {
+                this.id = config.name || `uiElement_${THREE.MathUtils.generateUUID()}`;
+                this.mesh = null; // The THREE.Mesh object representing this UI element
+
+                // Combine global defaults, menu-inherited styles, and element-specific styles
+                this.style = { ...GLOBAL_DEFAULT_STYLE, ...config.styleFromMenu, ...config.style };
+
+                // Normalize padding to an object if a single number is provided
+                if (typeof this.style.padding === 'number') {
+                    const p = this.style.padding;
+                    this.style.padding = { top: p, right: p, bottom: p, left: p };
+                } else {
+                    const defaultPaddingVal = (typeof GLOBAL_DEFAULT_STYLE.padding === 'number') ? GLOBAL_DEFAULT_STYLE.padding : 0.05;
+                    this.style.padding = {
+                        top: this.style.padding?.top ?? defaultPaddingVal,
+                        right: this.style.padding?.right ?? defaultPaddingVal,
+                        bottom: this.style.padding?.bottom ?? defaultPaddingVal,
+                        left: this.style.padding?.left ?? defaultPaddingVal,
+                    };
+                }
+
+                this.userData = { // Data attached to the mesh for raycasting and state
+                    config: config,
+                    isHovered: false,
+                    isFocused: false,
+                    isActive: false, // True if element is currently being pressed (e.g., mouse down)
+                    uiElementInstance: this // Reference back to this UIElement3D instance
+                };
+                this.type = config.type || 'uibase'; // Type identifier (e.g., 'button', 'text_input')
+                this.visible = true;
+                this.menuManager = config.menuManager;
+            }
+
+            /**
+             * Abstract method to create the THREE.Mesh for this element.
+             * Must be implemented by subclasses.
+             * @returns {THREE.Mesh} The created mesh.
+             */
+            createMesh() {
+                throw new Error(`UIElement3D (${this.id}): createMesh() must be implemented by subclass.`);
+            }
+
+            /**
+             * Updates the visual appearance of the element (texture).
+             * @param {string} newBgColor - The new background color.
+             * @param {string} [newTextColor=null] - The new text color.
+             * @param {string} [newText=null] - The new text content.
+             * @param {boolean} [showCursor=false] - Whether to display a cursor (for text inputs).
+             */
+            updateAppearance(newBgColor, newTextColor = null, newText = null, showCursor = false) {
+                if (this.mesh && this.mesh.userData.updateTextureMethod) {
+                    this.mesh.userData.updateTextureMethod(newBgColor, newTextColor, newText, showCursor);
+                } else if (this.mesh && this.mesh.material && this.mesh.material.color && newBgColor) {
+                    // Fallback for simple color change if no texture update method
+                    this.mesh.material.color.set(newBgColor);
+                }
+            }
+
+            /** Called when the pointer hovers over the element. */
+            onHover() {
+                if (!this.visible || this.userData.isFocused || this.userData.isActive) return;
+                this.userData.isHovered = true;
+                this.updateAppearance(this.style.hoverBackgroundColor);
+            }
+
+            /** Called when the pointer stops hovering over the element. */
+            onUnhover() {
+                if (!this.visible) return;
+                this.userData.isHovered = false;
+                if (this.userData.isFocused) {
+                    this.updateAppearance(this.style.focusBackgroundColor, null, null, this.type === 'text_input' ? cursorVisible : false);
+                } else if (this.userData.isActive) {
+                    this.updateAppearance(this.style.activeBackgroundColor);
+                } else {
+                    this.updateAppearance(this.style.backgroundColor);
+                }
+            }
+
+            /** Called when the element is clicked. Default behavior is to request focus. */
+            onClick() {
+                this.setFocus(true);
+            }
+
+            /** Called when a mousedown event occurs on the element. */
+            onMouseDown() { /* To be overridden by subclasses like ButtonElement */ }
+
+            /** Called when a mouseup event occurs on the element. */
+            onMouseUp() { /* To be overridden by subclasses like ButtonElement */ }
+
+            /**
+             * Called when a key is pressed while the element is focused.
+             * @param {KeyboardEvent} event - The keyboard event.
+             */
+            onKeyDown(event) {
+                // console.log(`Key '${event.key}' (UIElement3D default handler) on focused ${this.id}`);
+            }
+
+            /**
+             * Sets or unsets the focus state of the element.
+             * Manages focus transfer through the MenuManager.
+             * @param {boolean} focused - True to set focus, false to remove.
+             */
+            setFocus(focused) {
+                if (!this.menuManager) {
+                    console.warn(`UIElement3D (${this.id}): menuManager is not set for focus management.`);
+                    return;
+                }
+                if (this.userData.isFocused === focused) return;
+
+                this.userData.isFocused = focused;
+                this.userData.isHovered = false; // Focus overrides hover state
+
+                if (this.userData.isFocused) {
+                    // If another item is focused, unfocus it
+                    if (this.menuManager.focusedItem && this.menuManager.focusedItem !== this) {
+                        this.menuManager.focusedItem.setFocus(false);
+                    }
+                    this.menuManager.focusedItem = this;
+                    this.updateAppearance(this.style.focusBackgroundColor, null, null, this.type === 'text_input' ? cursorVisible : false);
+                    // console.log(`Focused: ${this.id}`);
+                    if (this.type === 'text_input') startBlinkingCursor();
+                } else {
+                    if (this.menuManager.focusedItem === this) {
+                        this.menuManager.focusedItem = null;
+                    }
+                    if (this.type === 'text_input') stopBlinkingCursor();
+                    // Revert to base appearance (or hover if applicable, though onUnhover handles that edge case better)
+                    this.updateAppearance(this.style.backgroundColor);
+                    // console.log(`Unfocused: ${this.id}`);
+                }
+            }
+
+            /** Cleans up resources used by the element (geometry, material, texture). */
+            dispose() {
+                if (this.mesh) {
+                    if (this.mesh.geometry) this.mesh.geometry.dispose();
+                    if (this.mesh.material) {
+                        if (this.mesh.material.map && this.mesh.material.map.dispose) {
+                            this.mesh.material.map.dispose();
+                        }
+                        if (this.mesh.material.dispose) this.mesh.material.dispose();
+                    }
+                    if (this.mesh.parent) this.mesh.parent.remove(this.mesh);
+                    this.mesh = null;
+                }
+
+                // Clear focus if this element was focused
+                if (this.menuManager && this.menuManager.focusedItem === this) {
+                    this.menuManager.focusedItem = null;
+                    if (this.type === 'text_input') stopBlinkingCursor();
+                }
+                // Interaction handlers should update their hovered/active elements if they point to this.
+            }
         }
 
-        class TextLabelElement extends UIElement3D { constructor(config) { super(config); this.text = config.text || "Label"; this.type = 'textlabel'; this.mesh = this.createMesh(); if (this.mesh && config.position) this.mesh.position.copy(config.position); if (this.mesh && config.rotation) this.mesh.rotation.copy(config.rotation); if (this.mesh) interactiveElements.push(this.mesh); } createMesh() { const canvas = document.createElement('canvas'); const context = canvas.getContext('2d'); const currentStyle = this.style; const canvasWidth = Math.floor(currentStyle.width * RESOLUTION_FACTOR); const canvasHeight = Math.floor(currentStyle.height * RESOLUTION_FACTOR); canvas.width = canvasWidth; canvas.height = canvasHeight; const texture = new THREE.CanvasTexture(canvas); const updateTextureMethod = (newBgColor, newTextColor = null, newText = null, showCursor = false) => { context.fillStyle = newBgColor || currentStyle.backgroundColor; context.fillRect(0, 0, canvasWidth, canvasHeight); const textToRender = newText || this.text; context.font = `Bold ${currentStyle.fontSize}px ${currentStyle.fontFamily}`; context.fillStyle = newTextColor || currentStyle.textColor; const paddingPx = { top: currentStyle.padding.top * RESOLUTION_FACTOR, right: currentStyle.padding.right * RESOLUTION_FACTOR, bottom: currentStyle.padding.bottom * RESOLUTION_FACTOR, left: currentStyle.padding.left * RESOLUTION_FACTOR }; const textHeightApproximation = currentStyle.fontSize; let x, y; context.textAlign = currentStyle.textAlign; if (currentStyle.textAlign === 'left') { x = paddingPx.left; } else if (currentStyle.textAlign === 'right') { x = canvasWidth - paddingPx.right; } else { x = canvasWidth / 2; } context.textBaseline = currentStyle.verticalAlign; if (currentStyle.verticalAlign === 'top') { y = paddingPx.top; } else if (currentStyle.verticalAlign === 'bottom') { y = canvasHeight - paddingPx.bottom; } else { y = canvasHeight / 2; } if(context.textBaseline === 'top') y += textHeightApproximation * 0.75; else if (context.textBaseline === 'bottom') y -= textHeightApproximation * 0.25; context.fillText(textToRender, x, y); texture.needsUpdate = true; }; updateTextureMethod(currentStyle.backgroundColor, currentStyle.textColor, this.text, false); const geometry = new THREE.PlaneGeometry(currentStyle.width, currentStyle.height); const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.7, metalness: 0.1, transparent: true, side: THREE.DoubleSide }); const mesh = new THREE.Mesh(geometry, material); mesh.name = this.id; mesh.userData = this.userData; mesh.userData.updateTextureMethod = updateTextureMethod; mesh.userData.uiElementInstance = this; return mesh; } setText(newText) { this.text = newText; let bgColor = this.style.backgroundColor; if (this.userData.isFocused) bgColor = this.style.focusBackgroundColor; else if (this.userData.isHovered) bgColor = this.style.hoverBackgroundColor; this.updateAppearance(bgColor, null, this.text, false); } updateAppearance(newBgColor, newTextColor = null, newText = null, showCursor = false) { if (this.mesh && this.mesh.userData.updateTextureMethod) { this.mesh.userData.updateTextureMethod(newBgColor, newTextColor, newText === null ? this.text : newText, showCursor); } } }
-        class ButtonElement extends TextLabelElement { constructor(config) { super(config); this.type = 'button'; this.action = config.actionKey ? null : (config.action || (() => {console.log(`Button '${this.id}' clicked, no direct action defined.`); if(this.actionKey && this.menuManager) this.menuManager.executeAction(this.actionKey, this);})); if(config.actionKey && this.menuManager) this.actionKey = config.actionKey; else this.actionKey = null; } onClick() { super.onClick(); if (this.action) { this.action(); } else if (this.actionKey && this.menuManager) { this.menuManager.executeAction(this.actionKey, this); } } onMouseDown() { if (this.userData.isFocused && this.type === 'button') return; this.userData.isActive = true; this.updateAppearance(this.style.activeBackgroundColor); } onMouseUp() { this.userData.isActive = false; if (this.userData.isFocused) { this.updateAppearance(this.style.focusBackgroundColor); } else if (this.userData.isHovered) { this.updateAppearance(this.style.hoverBackgroundColor); } else { this.updateAppearance(this.style.backgroundColor); } } }
-        class TextInputElement extends UIElement3D { constructor(config) { const textInputDefaultStyle = { backgroundColor: '#FFFFFF', textColor: '#000000', placeholderTextColor: GLOBAL_DEFAULT_STYLE.placeholderTextColor, textAlign: 'left', verticalAlign: 'middle', padding: { top: 0.05, right: 0.1, bottom: 0.05, left: 0.1 }, focusBackgroundColor: GLOBAL_DEFAULT_STYLE.textInputFocusColor, hoverBackgroundColor: '#F0F0F0', }; const finalStyle = { ...GLOBAL_DEFAULT_STYLE, ...textInputDefaultStyle, ...config.style }; super({...config, style: finalStyle}); this.type = 'text_input'; this.value = config.value || ""; this.placeholder = config.placeholder || "Enter text..."; this.maxLength = config.maxLength || 100; this.mesh = this.createMesh(); if (this.mesh && config.position) this.mesh.position.copy(config.position); if (this.mesh && config.rotation) this.mesh.rotation.copy(config.rotation); if (this.mesh) interactiveElements.push(this.mesh); } createMesh() { const canvas = document.createElement('canvas'); const context = canvas.getContext('2d'); const currentStyle = this.style; canvas.width = Math.floor(currentStyle.width * RESOLUTION_FACTOR); canvas.height = Math.floor(currentStyle.height * RESOLUTION_FACTOR); const texture = new THREE.CanvasTexture(canvas); const updateTextureMethod = (newBgColor, newTextColor = null, newText = null, showCursor = false) => { context.fillStyle = newBgColor || currentStyle.backgroundColor; context.fillRect(0, 0, canvas.width, canvas.height); const hasValue = (newText !== null && newText !== "") || (newText === null && this.value !== ""); const textToDisplay = newText !== null ? newText : (this.value || this.placeholder); const colorToDisplay = (this.value || (newText && newText !== this.placeholder)) ? (newTextColor || currentStyle.textColor) : currentStyle.placeholderTextColor; const displayTextWithCursor = textToDisplay + (showCursor ? "|" : ""); context.font = `Bold ${currentStyle.fontSize}px ${currentStyle.fontFamily}`; context.fillStyle = colorToDisplay; context.textAlign = 'left'; context.textBaseline = 'middle'; const paddingXPx = currentStyle.padding.left * RESOLUTION_FACTOR; context.fillText(displayTextWithCursor, paddingXPx, canvas.height / 2); texture.needsUpdate = true; }; updateTextureMethod(currentStyle.backgroundColor, null, this.value || this.placeholder, false); const geometry = new THREE.PlaneGeometry(currentStyle.width, currentStyle.height); const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.8, metalness: 0.1, transparent: true, side: THREE.DoubleSide }); const mesh = new THREE.Mesh(geometry, material); mesh.name = this.id; mesh.userData = this.userData; mesh.userData.updateTextureMethod = updateTextureMethod; mesh.userData.uiElementInstance = this; return mesh; } updateAppearance(newBgColor, newTextColor = null, newText = null, showCursor = false) { if (this.mesh && this.mesh.userData.updateTextureMethod) { this.mesh.userData.updateTextureMethod(newBgColor, newTextColor, this.value, showCursor); } } onClick() { super.onClick(); }
-            onKeyDown(event) { if (!this.userData.isFocused) return; if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); } if (event.key.length === 1 && this.value.length < this.maxLength) { this.value += event.key; } else if (event.key === 'Backspace') { this.value = this.value.slice(0, -1); } else if (event.key === 'Enter') { console.log(`TextInput '${this.id}' Enter pressed. Value: ${this.value}`); this.setFocus(false); } this.updateAppearance(this.style.focusBackgroundColor, null, null, cursorVisible); }
-        }
-        class VerticalLayoutContainer { constructor(config={}) { this.group = new THREE.Group(); if(config.position)this.group.position.copy(config.position); this.elements=[]; this.itemSpacing = config.style?.itemSpacing !== undefined ? config.style.itemSpacing : GLOBAL_DEFAULT_STYLE.itemSpacing; } addElement(uiElement) { if (!(uiElement instanceof UIElement3D && uiElement.mesh)) { console.error("VerticalLayoutContainer: Attempted to add invalid element.", uiElement); return; } this.elements.push(uiElement); this.group.add(uiElement.mesh); this.performLayout(); } removeElement(uiElement) { const index = this.elements.indexOf(uiElement); if (index > -1) { this.elements.splice(index, 1); this.group.remove(uiElement.mesh); uiElement.dispose(); this.performLayout(); } } performLayout() { let totalHeight = 0; this.elements.forEach((element, index) => { totalHeight += element.style.height; if (index < this.elements.length - 1) { totalHeight += this.itemSpacing; } }); let currentY = totalHeight / 2; this.elements.forEach(element => { const elementHeight = element.style.height; element.mesh.position.y = currentY - (elementHeight / 2); element.mesh.position.x = 0; currentY -= (elementHeight + this.itemSpacing); }); } addToScene(targetScene) { targetScene.add(this.group); } dispose() { this.elements.forEach(element => element.dispose()); this.elements = []; if (this.group.parent) { this.group.parent.remove(this.group); } } }
+        /**
+         * A UI element for displaying static or dynamic text.
+         */
+        class TextLabelElement extends UIElement3D {
+            constructor(config) {
+                super(config);
+                this.text = config.text || "Label";
+                this.type = 'textlabel';
+                this.mesh = this.createMesh();
+                if (this.mesh && config.position) this.mesh.position.copy(config.position); // Used for standalone elements
+                if (this.mesh && config.rotation) this.mesh.rotation.copy(config.rotation); // Used for standalone elements
+            }
 
+            createMesh() {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const currentStyle = this.style;
+
+                const canvasWidth = Math.floor(currentStyle.width * RESOLUTION_FACTOR);
+                const canvasHeight = Math.floor(currentStyle.height * RESOLUTION_FACTOR);
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+
+                const texture = new THREE.CanvasTexture(canvas);
+
+                const updateTextureMethod = (newBgColor, newTextColor = null, newText = null) => {
+                    context.fillStyle = newBgColor || currentStyle.backgroundColor;
+                    context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                    const textToRender = newText !== null ? newText : this.text;
+                    context.font = `Bold ${currentStyle.fontSize}px ${currentStyle.fontFamily}`;
+                    context.fillStyle = newTextColor || currentStyle.textColor;
+
+                    const paddingPx = {
+                        top: currentStyle.padding.top * RESOLUTION_FACTOR,
+                        right: currentStyle.padding.right * RESOLUTION_FACTOR,
+                        bottom: currentStyle.padding.bottom * RESOLUTION_FACTOR,
+                        left: currentStyle.padding.left * RESOLUTION_FACTOR
+                    };
+
+                    const textHeightApproximation = currentStyle.fontSize; // For vertical alignment
+                    let x, y;
+
+                    // Horizontal alignment
+                    context.textAlign = currentStyle.textAlign;
+                    if (currentStyle.textAlign === 'left') {
+                        x = paddingPx.left;
+                    } else if (currentStyle.textAlign === 'right') {
+                        x = canvasWidth - paddingPx.right;
+                    } else { // center
+                        x = canvasWidth / 2;
+                    }
+
+                    // Vertical alignment
+                    context.textBaseline = currentStyle.verticalAlign;
+                    if (currentStyle.verticalAlign === 'top') {
+                        y = paddingPx.top;
+                    } else if (currentStyle.verticalAlign === 'bottom') {
+                        y = canvasHeight - paddingPx.bottom;
+                    } else { // middle
+                        y = canvasHeight / 2;
+                    }
+
+                    // Adjust y for baseline quirks
+                    if (context.textBaseline === 'top') y += textHeightApproximation * 0.75; // Rough adjustment
+                    else if (context.textBaseline === 'bottom') y -= textHeightApproximation * 0.25; // Rough adjustment
+
+
+                    context.fillText(textToRender, x, y);
+                    texture.needsUpdate = true;
+                };
+
+                updateTextureMethod(currentStyle.backgroundColor, currentStyle.textColor, this.text);
+
+                const geometry = new THREE.PlaneGeometry(currentStyle.width, currentStyle.height);
+                const material = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: 0.7,
+                    metalness: 0.1,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.name = this.id;
+                mesh.userData = this.userData; // Link userData from UIElement3D
+                mesh.userData.updateTextureMethod = updateTextureMethod;
+                mesh.userData.uiElementInstance = this;
+                return mesh;
+            }
+
+            /**
+             * Sets the text content of the label and updates its appearance.
+             * @param {string} newText - The new text to display.
+             */
+            setText(newText) {
+                this.text = newText;
+                let bgColor = this.style.backgroundColor;
+                if (this.userData.isFocused) bgColor = this.style.focusBackgroundColor;
+                else if (this.userData.isHovered) bgColor = this.style.hoverBackgroundColor;
+                this.updateAppearance(bgColor, null, this.text, false);
+            }
+
+            /** Overrides base to pass current text to texture update. */
+            updateAppearance(newBgColor, newTextColor = null, newText = null, showCursor = false) {
+                if (this.mesh && this.mesh.userData.updateTextureMethod) {
+                    this.mesh.userData.updateTextureMethod(newBgColor, newTextColor, newText === null ? this.text : newText, showCursor);
+                }
+            }
+        }
+
+        /**
+         * A clickable button element that can trigger actions.
+         */
+        class ButtonElement extends TextLabelElement {
+            constructor(config) {
+                super(config);
+                this.type = 'button';
+                this.actionKey = config.actionKey || null; // Key to find action in MenuManager
+                // Direct action callback, if no actionKey is provided
+                this.actionCallback = config.actionKey ? null : (config.action || (() => {
+                    // console.log(`Button '${this.id}' clicked, no specific action defined.`);
+                    if (this.actionKey && this.menuManager) {
+                         this.menuManager.executeAction(this.actionKey, this);
+                    }
+                }));
+            }
+
+            /** Overrides to execute its action. */
+            onClick() {
+                super.onClick(); // Handles focus
+                if (this.actionCallback) {
+                    this.actionCallback();
+                } else if (this.actionKey && this.menuManager) {
+                    this.menuManager.executeAction(this.actionKey, this);
+                }
+            }
+
+            /** Handles visual state for mouse down. */
+            onMouseDown() {
+                if (this.userData.isFocused && this.type === 'button') return; // Don't change from focus color if already focused
+                this.userData.isActive = true;
+                this.updateAppearance(this.style.activeBackgroundColor);
+            }
+
+            /** Handles visual state for mouse up. */
+            onMouseUp() {
+                this.userData.isActive = false;
+                // Revert to focused, hovered, or default state
+                if (this.userData.isFocused) {
+                    this.updateAppearance(this.style.focusBackgroundColor);
+                } else if (this.userData.isHovered) {
+                    this.updateAppearance(this.style.hoverBackgroundColor);
+                } else {
+                    this.updateAppearance(this.style.backgroundColor);
+                }
+            }
+        }
+
+        /**
+         * A UI element for text input, with placeholder and cursor support.
+         */
+        class TextInputElement extends UIElement3D {
+            constructor(config) {
+                const textInputDefaultStyle = {
+                    backgroundColor: '#FFFFFF', // Default white background for input
+                    textColor: '#000000',       // Default black text
+                    placeholderTextColor: GLOBAL_DEFAULT_STYLE.placeholderTextColor,
+                    textAlign: 'left',
+                    verticalAlign: 'middle',
+                    padding: { top: 0.05, right: 0.1, bottom: 0.05, left: 0.1 }, // More padding for text
+                    focusBackgroundColor: GLOBAL_DEFAULT_STYLE.textInputFocusColor,
+                    hoverBackgroundColor: '#F0F0F0', // Lighter hover for text inputs
+                };
+                const finalStyle = { ...GLOBAL_DEFAULT_STYLE, ...textInputDefaultStyle, ...config.style };
+                super({ ...config, style: finalStyle });
+
+                this.type = 'text_input';
+                this.value = config.value || "";
+                this.placeholder = config.placeholder || "Enter text...";
+                this.maxLength = config.maxLength || 100;
+                this.mesh = this.createMesh();
+                if (this.mesh && config.position) this.mesh.position.copy(config.position);
+                if (this.mesh && config.rotation) this.mesh.rotation.copy(config.rotation);
+            }
+
+            createMesh() {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const currentStyle = this.style;
+
+                canvas.width = Math.floor(currentStyle.width * RESOLUTION_FACTOR);
+                canvas.height = Math.floor(currentStyle.height * RESOLUTION_FACTOR);
+                const texture = new THREE.CanvasTexture(canvas);
+
+                const updateTextureMethod = (newBgColor, newTextColor = null, newText = null, showCursor = false) => {
+                    context.fillStyle = newBgColor || currentStyle.backgroundColor;
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Determine text and color based on whether there's a value or placeholder
+                    const hasValue = (newText !== null && newText !== "") || (newText === null && this.value !== "");
+                    const textToDisplay = newText !== null ? newText : (this.value || this.placeholder);
+                    const colorToDisplay = (this.value || (newText && newText !== this.placeholder))
+                                          ? (newTextColor || currentStyle.textColor)
+                                          : currentStyle.placeholderTextColor;
+
+                    const displayTextWithCursor = textToDisplay + (showCursor ? "|" : "");
+
+                    context.font = `Bold ${currentStyle.fontSize}px ${currentStyle.fontFamily}`;
+                    context.fillStyle = colorToDisplay;
+                    context.textAlign = 'left'; // Text inputs are usually left-aligned
+                    context.textBaseline = 'middle';
+
+                    const paddingXPx = currentStyle.padding.left * RESOLUTION_FACTOR;
+                    context.fillText(displayTextWithCursor, paddingXPx, canvas.height / 2);
+                    texture.needsUpdate = true;
+                };
+
+                updateTextureMethod(currentStyle.backgroundColor, null, this.value || this.placeholder, false);
+
+                const geometry = new THREE.PlaneGeometry(currentStyle.width, currentStyle.height);
+                const material = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: 0.8, // Less reflective than buttons
+                    metalness: 0.1,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.name = this.id;
+                mesh.userData = this.userData;
+                mesh.userData.updateTextureMethod = updateTextureMethod;
+                mesh.userData.uiElementInstance = this;
+                return mesh;
+            }
+
+            /** Overrides base to pass current value and cursor state to texture update. */
+            updateAppearance(newBgColor, newTextColor = null, newText = null, showCursor = false) {
+                if (this.mesh && this.mesh.userData.updateTextureMethod) {
+                    // Always use this.value for text, newText is not used for TextInput directly
+                    this.mesh.userData.updateTextureMethod(newBgColor, newTextColor, this.value, showCursor);
+                }
+            }
+
+            /** Handles keyboard input for text modification. */
+            onKeyDown(event) {
+                if (!this.userData.isFocused) return;
+
+                // Prevent default browser behavior for relevant keys if we handle them
+                if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Enter') {
+                    event.preventDefault();
+                    event.stopPropagation(); // Stop from bubbling to global key listeners if any
+                }
+
+                if (event.key.length === 1 && this.value.length < this.maxLength) { // Printable character
+                    this.value += event.key;
+                } else if (event.key === 'Backspace') {
+                    this.value = this.value.slice(0, -1);
+                } else if (event.key === 'Enter') {
+                    // console.log(`TextInput '${this.id}' Enter pressed. Value: ${this.value}`);
+                    this.setFocus(false); // Optionally unfocus on Enter
+                }
+                // Update appearance with new value and current cursor state
+                this.updateAppearance(this.style.focusBackgroundColor, null, null, cursorVisible);
+            }
+        }
+
+        /**
+         * @deprecated VerticalLayoutContainer is not actively used. Menus use ThreeJSRenderer.applyLayoutToMenu.
+         * A container that arranges UI elements vertically.
+         * This class provides an example of how custom layout containers could be implemented.
+         */
+        class VerticalLayoutContainer {
+            constructor(config = {}) {
+                this.group = new THREE.Group();
+                if (config.position) this.group.position.copy(config.position);
+                this.elements = [];
+                this.itemSpacing = config.style?.itemSpacing !== undefined ? config.style.itemSpacing : GLOBAL_DEFAULT_STYLE.itemSpacing;
+            }
+
+            addElement(uiElement) {
+                if (!(uiElement instanceof UIElement3D && uiElement.mesh)) {
+                    console.error("VerticalLayoutContainer: Attempted to add invalid element.", uiElement);
+                    return;
+                }
+                this.elements.push(uiElement);
+                this.group.add(uiElement.mesh);
+                this.performLayout();
+            }
+
+            removeElement(uiElement) {
+                const index = this.elements.indexOf(uiElement);
+                if (index > -1) {
+                    this.elements.splice(index, 1);
+                    this.group.remove(uiElement.mesh);
+                    uiElement.dispose(); // Ensure the element cleans itself up
+                    this.performLayout();
+                }
+            }
+
+            performLayout() {
+                let totalHeight = 0;
+                this.elements.forEach((element, index) => {
+                    totalHeight += element.style.height;
+                    if (index < this.elements.length - 1) {
+                        totalHeight += this.itemSpacing;
+                    }
+                });
+
+                let currentY = totalHeight / 2; // Start from the top of the layout block
+                this.elements.forEach(element => {
+                    const elementHeight = element.style.height;
+                    element.mesh.position.y = currentY - (elementHeight / 2);
+                    element.mesh.position.x = 0; // Center horizontally within the layout
+                    currentY -= (elementHeight + this.itemSpacing);
+                });
+            }
+
+            addToScene(targetScene) {
+                targetScene.add(this.group);
+            }
+
+            dispose() {
+                this.elements.forEach(element => element.dispose());
+                this.elements = [];
+                if (this.group.parent) {
+                    this.group.parent.remove(this.group);
+                }
+            }
+        }
+
+
+        /**
+         * Manages UI menus, themes, actions, and interaction handlers.
+         * Acts as a central point for UI system operations.
+         */
         class MenuManager {
-            constructor(renderer) { this.renderer = renderer; this.activeMenu = null; this.interactionHandler = null; this.focusedItem = null; this.themes = {...THEMES}; /* Initialize with global THEMES */ this.activeThemeName = 'default'; this.menuDefinitions = {}; this.actionRegistry={}; this.menuStack=[]; }
+            constructor(rendererInstance) {
+                this.renderer = rendererInstance; // The ThreeJSRenderer instance
+                this.activeMenu = null;
+                this.interactionHandler = null;
+                this.focusedItem = null; // The currently focused UIElement3D instance
+                this.themes = { ...THEMES };
+                this.activeThemeName = 'default';
+                this.menuDefinitions = {}; // Stores menu structure definitions
+                this.actionRegistry = {};  // Stores functions mapped to actionKeys
+                this.menuStack = [];       // For managing nested or sequential menus (basic for now)
+            }
+
+            /** Registers a new theme. */
             registerTheme(name, themeObject) { this.themes[name] = themeObject; }
-            setActiveTheme(name) { if (this.themes[name]) { this.activeThemeName = name; } else { console.warn(`Theme '${name}' not found.`); } }
-            setInteractionHandler(handler) { if(this.interactionHandler && this.interactionHandler.dispose) this.interactionHandler.dispose(); this.interactionHandler = handler; if(this.interactionHandler) { this.interactionHandler.menuManager = this; if(this.activeMenu) this.interactionHandler.setActiveMenu(this.activeMenu); } }
+
+            /** Sets the active theme for new menus. */
+            setActiveTheme(name) {
+                if (this.themes[name]) { this.activeThemeName = name; }
+                else { console.warn(`Theme '${name}' not found.`); }
+            }
+
+            /** Sets the current interaction handler (e.g., mouse or XR). */
+            setInteractionHandler(handler) {
+                if (this.interactionHandler && typeof this.interactionHandler.dispose === 'function') {
+                    this.interactionHandler.dispose();
+                }
+                this.interactionHandler = handler;
+                if (this.interactionHandler) {
+                    this.interactionHandler.menuManager = this; // Provide handler with a reference to this manager
+                    if (this.activeMenu) {
+                        this.interactionHandler.setActiveMenu(this.activeMenu);
+                    }
+                }
+            }
+
+            /** Stores a menu definition for later loading. */
             registerMenuDefinition(definition) { this.menuDefinitions[definition.id] = definition; }
+
+            /** Registers a callback function for a given action key. */
             registerAction(actionKey, callback) { this.actionRegistry[actionKey] = callback; }
-            executeAction(actionKey, menuItemInstance, optionData) { if (this.actionRegistry[actionKey]) { this.actionRegistry[actionKey](menuItemInstance, this, optionData); } else { console.warn(`Action not found: ${actionKey} for item ${menuItemInstance.id}`); } }
-            loadMenu(menuId) { if (this.focusedItem) { this.focusedItem.setFocus(false); } if (this.activeMenu) { this.activeMenu.hide(); this.activeMenu.dispose(); } const definition = this.menuDefinitions[menuId]; if (!definition) { console.error(`Menu definition not found: ${menuId}`); return null; } this.activeMenu = new Menu(definition, this.renderer, this); this.activeMenu.render(); this.activeMenu.show(); this.menuStack = [this.activeMenu]; if (this.interactionHandler) this.interactionHandler.setActiveMenu(this.activeMenu); return this.activeMenu; }
-            update() { if(this.interactionHandler) this.interactionHandler.update(); }
+
+            /**
+             * Executes a registered action.
+             * @param {string} actionKey - The key of the action to execute.
+             * @param {UIElement3D} menuItemInstance - The UI element that triggered the action.
+             * @param {any} [optionData] - Optional data to pass to the action.
+             */
+            executeAction(actionKey, menuItemInstance, optionData) {
+                if (this.actionRegistry[actionKey]) {
+                    this.actionRegistry[actionKey](menuItemInstance, this, optionData);
+                } else {
+                    console.warn(`Action not found: ${actionKey} for item ${menuItemInstance.id}`);
+                }
+            }
+
+            /**
+             * Loads and displays a menu based on its registered definition.
+             * @param {string} menuId - The ID of the menu definition to load.
+             * @returns {Menu|null} The loaded Menu instance, or null if not found.
+             */
+            loadMenu(menuId) {
+                if (this.focusedItem) { this.focusedItem.setFocus(false); } // Unfocus current item
+                if (this.activeMenu) {
+                    this.activeMenu.hide();
+                    this.activeMenu.dispose(); // Clean up the old menu
+                }
+
+                const definition = this.menuDefinitions[menuId];
+                if (!definition) {
+                    console.error(`Menu definition not found: ${menuId}`);
+                    return null;
+                }
+
+                this.activeMenu = new Menu(definition, this.renderer, this);
+                this.activeMenu.render(); // Builds the visual representation
+                this.activeMenu.show();
+                this.menuStack = [this.activeMenu]; // Basic stack, replace previous
+
+                if (this.interactionHandler) {
+                    this.interactionHandler.setActiveMenu(this.activeMenu);
+                }
+                return this.activeMenu;
+            }
+
+            /** Called in the main animation loop to update interaction handlers. */
+            update() {
+                if (this.interactionHandler) this.interactionHandler.update();
+            }
         }
+
+        /**
+         * Represents a single UI menu, consisting of multiple UI elements.
+         * It's built from a menu definition and managed by the MenuManager.
+         */
         class Menu {
-            constructor(menuDefinition, renderer, menuManagerInstance) {
-                this.id = menuDefinition.id; this.definition = menuDefinition; this.renderer = renderer;
-                this.menuManager = menuManagerInstance; this.items = [];
+            constructor(menuDefinition, rendererInstance, menuManagerInstance) {
+                this.id = menuDefinition.id;
+                this.definition = menuDefinition;
+                this.renderer = rendererInstance; // The ThreeJSRenderer instance
+                this.menuManager = menuManagerInstance;
+                this.items = []; // Array of UIElement3D instances
+
+                // Determine theme: menu-specific, then manager's active, then default, then global style.
                 const menuThemeName = menuDefinition.theme || this.menuManager.activeThemeName || 'default';
                 this.activeTheme = this.menuManager.themes[menuThemeName] || GLOBAL_DEFAULT_STYLE;
-                this.styleDefaults = { ...(this.activeTheme || {}), ...(menuDefinition.style || {}) };
-                this.layout = menuDefinition.layout || { type: 'vertical', alignment: 'center' };
-                this.group = null; this.contentGroup = null;
+
+                // Style defaults for items in this menu, combining theme and menu-specific overrides.
+                this.styleDefaults = { ...this.activeTheme, ...(menuDefinition.style || {}) };
+
+                this.group = null; // THREE.Group for the whole menu (position, visibility)
+                this.contentGroup = null; // THREE.Group for menu items (layout within the menu)
+
                 this._buildItems();
             }
+
+            /**
+             * Instantiates UIElement3D objects based on the menu definition.
+             * @private
+             */
             _buildItems() {
                 this.definition.items.forEach(itemDef => {
                     let item;
-                    // Pass the renderer from MenuManager, not from UIElement3D's own config.renderer
-                    const elementConfig = { ...itemDef, styleFromMenu: this.styleDefaults, renderer: this.menuManager.renderer, menuManager: this.menuManager };
+                    const elementConfig = {
+                        ...itemDef,
+                        styleFromMenu: this.styleDefaults, // Pass menu-level styles to items
+                        // 'renderer' prop in elementConfig is not used by elements for mesh creation.
+                        // Elements create their own meshes.
+                        menuManager: this.menuManager
+                    };
+
                     switch (itemDef.type) {
                         case 'textlabel': item = new TextLabelElement(elementConfig); break;
                         case 'button': item = new ButtonElement(elementConfig); break;
                         case 'text_input': item = new TextInputElement(elementConfig); break;
-                        default: console.warn(`Menu._buildItems: Unknown item type: ${itemDef.type} for id '${itemDef.name || 'unknown'}'`); return;
+                        default:
+                            console.warn(`Menu._buildItems: Unknown item type: ${itemDef.type} for id '${itemDef.name || 'unknown'}'`);
+                            return;
                     }
                     if (item) { this.items.push(item); }
                 });
             }
+
+            /** Creates the visual representation of the menu and its items. */
             render() {
-                this.group = this.renderer.createMenuView(this);
-                this.contentGroup = new THREE.Group();
+                this.group = this.renderer.createMenuView(this); // Creates the main group for the menu
+                this.contentGroup = new THREE.Group(); // Group for items, child of this.group
                 this.group.add(this.contentGroup);
 
                 this.items.forEach(item => {
-                    // item.createVisuals(this.contentGroup); // Old problematic line
-                    if (item.mesh) { // Corrected logic: Add existing mesh
-                        this.contentGroup.add(item.mesh);
+                    if (item.mesh) {
+                        this.contentGroup.add(item.mesh); // Add pre-created mesh of each item
                     } else {
-                        // This might happen if createMesh() failed or was not called in item's constructor
-                        console.warn(`Menu.render: Item ${item.id} (type: ${item.type}) does not have a mesh to add.`);
+                        console.warn(`Menu.render: Item ${item.id} (type: ${item.type}) has no mesh.`);
+                    }
+                });
+                this.renderer.applyLayoutToMenu(this); // Position items within contentGroup
+            }
+
+            /** Re-applies the layout to the menu items. */
+            applyLayout() {
+                if (this.group && this.items.length > 0) {
+                    this.renderer.applyLayoutToMenu(this);
+                }
+            }
+
+            /**
+             * Returns an array of interactive THREE.Mesh objects from this menu.
+             * Used by interaction handlers for raycasting.
+             * @returns {THREE.Mesh[]}
+             */
+            getInteractiveObjects() {
+                return this.items.filter(item => item.mesh && item.visible).map(item => item.mesh);
+            }
+
+            /** Makes the menu visible. */
+            show() { if (this.group) this.renderer.setMenuViewVisibility(this, true); }
+
+            /** Hides the menu and unfocuses any of its focused items. */
+            hide() {
+                if (this.group) {
+                    this.renderer.setMenuViewVisibility(this, false);
+                    // Unfocus any item within this menu that might be focused
+                    if (this.menuManager.focusedItem && this.items.includes(this.menuManager.focusedItem)) {
+                        this.menuManager.focusedItem.setFocus(false);
+                    }
+                }
+            }
+
+            /** Disposes of the menu and all its items. */
+            dispose() {
+                this.items.forEach(item => item.dispose());
+                this.items = [];
+                if (this.group) {
+                    this.renderer.disposeMenuView(this); // Removes group from scene and cleans up
+                    this.group = null;
+                }
+                this.contentGroup = null;
+            }
+        }
+
+
+        /**
+         * Base class for interaction handlers (e.g., mouse, XR controllers).
+         */
+        class BaseInteractionHandler {
+            constructor() {
+                this.menuManager = null; // Set by MenuManager
+                this.activeMenu = null;  // The menu this handler is currently interacting with
+                this.hoveredItem = null; // The UIElement3D instance currently hovered
+                this.activeElement = null; // The UIElement3D instance currently pressed (mousedown)
+            }
+
+            /**
+             * Sets the active menu for interaction.
+             * @param {Menu} menuInstance - The menu to interact with.
+             */
+            setActiveMenu(menuInstance) {
+                this.activeMenu = menuInstance;
+                // Clear previous interaction states
+                if (this.hoveredItem && typeof this.hoveredItem.onUnhover === 'function') {
+                    this.hoveredItem.onUnhover();
+                }
+                this.hoveredItem = null;
+                this.activeElement = null; // Active (pressed) element should also reset
+            }
+
+            /** Placeholder for update logic, called in the animation loop. */
+            update() { /* To be implemented by subclasses */ }
+
+            /** Cleans up event listeners or resources. */
+            dispose() {
+                this.activeElement = null;
+                this.hoveredItem = null;
+            }
+        }
+
+        /**
+         * Handles interactions with UI elements using Three.js scene graph operations.
+         * This class is responsible for creating menu views, applying layouts, and managing visibility.
+         */
+        class ThreeJSRenderer {
+            constructor(scene, camera) {
+                this.threeScene = scene;
+                this.camera = camera; // Needed for potential screen-space UI or billboarding
+                this.resolutionFactor = RESOLUTION_FACTOR; // Used by UI elements for texture quality
+            }
+
+            /**
+             * Creates the main THREE.Group for a menu and adds it to the scene.
+             * @param {Menu} menuInstance - The menu for which to create a view.
+             * @returns {THREE.Group} The created group.
+             */
+            createMenuView(menuInstance) {
+                const group = new THREE.Group();
+                if (menuInstance.definition.position) {
+                    group.position.copy(menuInstance.definition.position);
+                }
+                // Menu rotation could also be applied here from menuInstance.definition.rotation
+                this.threeScene.add(group);
+                return group;
+            }
+
+            /**
+             * Arranges the items within a menu's content group, typically vertically.
+             * @param {Menu} menuInstance - The menu whose items need layout.
+             */
+            applyLayoutToMenu(menuInstance) {
+                const style = menuInstance.styleDefaults; // Use menu's combined styles
+                const items = menuInstance.items;
+                const contentGroup = menuInstance.contentGroup;
+
+                if (items.length === 0 || !contentGroup) return;
+
+                let totalHeight = 0;
+                items.forEach((item, i) => {
+                    totalHeight += item.style.height;
+                    if (i < items.length - 1) {
+                        totalHeight += style.itemSpacing;
                     }
                 });
 
-                this.renderer.applyLayoutToMenu(this);
+                let currentY = totalHeight / 2; // Start from top for downward layout
+                items.forEach(item => {
+                    const itemH = item.style.height;
+                    if (item.mesh) {
+                        // Position relative to the contentGroup
+                        item.mesh.position.y = currentY - itemH / 2;
+                        item.mesh.position.x = 0; // Assuming centered layout horizontally
+                        // item.mesh.position.z = 0; // Assuming flat menu
+                    }
+                    currentY -= (itemH + style.itemSpacing);
+                });
             }
-            applyLayout() { if (this.group && this.items.length > 0) { this.renderer.applyLayoutToMenu(this); } }
-            getInteractiveObjects() { return this.items.filter(item => item.mesh && item.visible).map(item => item.mesh); }
-            show(){if (this.group) this.renderer.setMenuViewVisibility(this, true);} hide(){if (this.group) {this.renderer.setMenuViewVisibility(this, false); if (this.menuManager.focusedItem && this.items.includes(this.menuManager.focusedItem)) { this.menuManager.focusedItem.setFocus(false);}}}
-            dispose(){this.items.forEach(i=>i.dispose()); this.items = []; if (this.group) {this.renderer.disposeMenuView(this); this.group = null;} this.contentGroup = null;}
+
+            /**
+             * Removes a menu's group from the scene.
+             * @param {Menu} menuInstance - The menu to dispose of.
+             */
+            disposeMenuView(menuInstance) {
+                if (menuInstance.group && menuInstance.group.parent) {
+                    menuInstance.group.parent.remove(menuInstance.group);
+                }
+                // Note: Meshes within the group are disposed by Menu.dispose() calling item.dispose()
+            }
+
+            /**
+             * Sets the visibility of a menu's group.
+             * @param {Menu} menuInstance - The menu to toggle.
+             * @param {boolean} visible - True for visible, false for hidden.
+             */
+            setMenuViewVisibility(menuInstance, visible) {
+                if (menuInstance.group) {
+                    menuInstance.group.visible = visible;
+                }
+            }
         }
-        class BaseInteractionHandler { constructor() { this.menuManager = null; this.activeMenu = null; this.hoveredItem = null; this.activeElement = null; } setActiveMenu(menuInstance) { this.activeMenu = menuInstance; if (this.hoveredItem && this.hoveredItem.onUnhover) this.hoveredItem.onUnhover(); this.hoveredItem = null; this.activeElement = null;} update(){} dispose(){ this.activeElement = null;} }
-        class ThreeJSRenderer { constructor(scene, camera) { this.threeScene = scene; this.camera = camera; this.textureCache = {}; this.resolutionFactor = RESOLUTION_FACTOR;} _disposeTexture(texture) { if (texture) texture.dispose(); }
-            // These create*View methods are currently not used, as elements create their own meshes.
-            // They are kept here for potential future refactoring.
-            createButtonView(item) { const style = item.style; const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = Math.floor(style.width * this.resolutionFactor); canvas.height = Math.floor(style.height * this.resolutionFactor); const tex = new THREE.CanvasTexture(canvas); const mesh = new THREE.Mesh(new THREE.PlaneGeometry(style.width,style.height), new THREE.MeshStandardMaterial({map:tex, transparent:true, roughness:0.7,metalness:0.1, side:THREE.DoubleSide})); mesh.userData.uiElementInstance = item; mesh.userData.updateTextureMethod = (bg,tc,txt,sc) => {ctx.fillStyle = bg || style.backgroundColor; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.font = `Bold ${style.fontSize}px ${style.fontFamily}`; ctx.fillStyle = tc || style.textColor; ctx.textAlign=style.textAlign;ctx.textBaseline=style.verticalAlign; const p = style.padding; let x,y; if(style.textAlign === 'left') x=p.left*this.resolutionFactor; else if(style.textAlign === 'right') x=canvas.width-p.right*this.resolutionFactor; else x=canvas.width/2; if(style.verticalAlign === 'top') y=p.top*this.resolutionFactor; else if(style.verticalAlign === 'bottom') y=canvas.height-p.bottom*this.resolutionFactor; else y=canvas.height/2; if(ctx.textBaseline === 'top') y+= style.fontSize*0.75; else if(ctx.textBaseline === 'bottom') y-= style.fontSize*0.25; ctx.fillText(txt||item.text, x,y); tex.needsUpdate=true;}; mesh.userData.updateTextureMethod(style.backgroundColor, style.textColor, item.text, false); return mesh;}
-            createTextInputView(item) { const style = item.style; const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); canvas.width = Math.floor(style.width * this.resolutionFactor); canvas.height = Math.floor(style.height * this.resolutionFactor); const tex = new THREE.CanvasTexture(canvas); const mesh = new THREE.Mesh(new THREE.PlaneGeometry(style.width,style.height), new THREE.MeshStandardMaterial({map:tex, transparent:true, roughness:0.7,metalness:0.1, side:THREE.DoubleSide})); mesh.userData.uiElementInstance = item; mesh.userData.updateTextureMethod = (bg,tc,txt,sc) => {ctx.fillStyle = bg || style.backgroundColor; ctx.fillRect(0,0,canvas.width,canvas.height); const hasVal = (txt !== null && txt !== "") || (txt === null && item.value !== ""); const dispTxt = txt !== null ? txt : (item.value || item.placeholder); const dispCol = (item.value || (txt && txt !== item.placeholder)) ? (tc || style.textColor) : style.placeholderTextColor; const cursorTxt = dispTxt + (sc ? "|" : ""); ctx.font = `Bold ${style.fontSize}px ${style.fontFamily}`; ctx.fillStyle = dispCol; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; const padX = style.padding.left * this.resolutionFactor; ctx.fillText(cursorTxt, padX, canvas.height/2); tex.needsUpdate = true;}; mesh.userData.updateTextureMethod(style.backgroundColor,null,item.value||item.placeholder, false); return mesh;}
 
-            createMenuView(menuInstance) { const group = new THREE.Group(); if(menuInstance.definition.position) group.position.copy(menuInstance.definition.position); this.threeScene.add(group); return group;}
-            applyLayoutToMenu(menuInstance) { const style = menuInstance.styleDefaults; const items = menuInstance.items; if(items.length === 0 || !menuInstance.contentGroup) return; let totalHeight = 0; items.forEach((item, i) => { totalHeight += item.style.height; if (i < items.length - 1) totalHeight += style.itemSpacing; }); let currentY = totalHeight / 2; items.forEach(item => { const itemH = item.style.height; if(item.mesh) {item.mesh.position.y = currentY - itemH / 2; item.mesh.position.x = 0;} currentY -= (itemH + style.itemSpacing); }); }
-            updateMenuItemView(menuItem, state) { if (!menuItem.mesh || !menuItem.mesh.material ) return; const style = menuItem.style; let bgColor = style.backgroundColor; if(menuItem.type==='button' && menuItem.actionKey === null && !menuItem.action && !menuItem.userData.isFocused && !menuItem.userData.isHovered && !menuItem.userData.isActive) bgColor = style.backgroundColor; else if(state === 'focus') bgColor = style.focusBackgroundColor; else if(state === 'active') bgColor = style.activeBackgroundColor; else if(state === 'hover') bgColor = style.hoverBackgroundColor; if(menuItem.mesh.userData.updateTextureMethod) menuItem.mesh.userData.updateTextureMethod(bgColor, null, null, menuItem.type === 'text_input' && state==='focus' ? cursorVisible: false); }
-            disposeMenuView(menuInstance) { if(menuInstance.group && menuInstance.group.parent) menuInstance.group.parent.remove(menuInstance.group); } setMenuViewVisibility(m,v){if(m.group)m.group.visible=v;}
-        }
-        class MouseInteractionHandler extends BaseInteractionHandler { constructor(rendererDomElement, camera) { super(); this.rendererDomElement = rendererDomElement; this.camera = camera; this.raycaster = new THREE.Raycaster(); this.mouse = new THREE.Vector2(); this._onMouseMove = this._onMouseMove.bind(this); this._onMouseDown = this._onMouseDown.bind(this); this._onMouseUp = this._onMouseUp.bind(this); this._onMouseWheel = this._onMouseWheel.bind(this); this.rendererDomElement.addEventListener('mousemove', this._onMouseMove); this.rendererDomElement.addEventListener('mousedown', this._onMouseDown); document.addEventListener('mouseup', this._onMouseUp); this.rendererDomElement.addEventListener('wheel', this._onMouseWheel, {passive: false}); }
-            _onMouseMove(event) { const rect = this.rendererDomElement.getBoundingClientRect(); this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1; this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1; if (!this.activeMenu || !this.activeMenu.group || !this.activeMenu.group.visible || this.activeElement) return; this.raycaster.setFromCamera(this.mouse, this.camera); const intersects = this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false); let currentIntersectedUIElement = null; if (intersects.length > 0) currentIntersectedUIElement = intersects[0].object.userData.uiElementInstance; if (this.hoveredItem !== currentIntersectedUIElement) { if (this.hoveredItem) this.hoveredItem.onUnhover(); this.hoveredItem = currentIntersectedUIElement; if (this.hoveredItem) this.hoveredItem.onHover(); } }
-            _onMouseDown(event) { if (!this.activeMenu || !this.activeMenu.group ||!this.activeMenu.group.visible) return; this.raycaster.setFromCamera(this.mouse, this.camera); const intersects = this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false); if (intersects.length > 0) { const clickedElement = intersects[0].object.userData.uiElementInstance; if (clickedElement) { this.activeElement = clickedElement; if (typeof clickedElement.onMouseDown === 'function') clickedElement.onMouseDown(); } } }
-            _onMouseUp(event) { if (this.activeElement) { this.raycaster.setFromCamera(this.mouse, this.camera); const intersects = this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false); let releasedOverActive = false; if (intersects.length > 0 && this.activeElement) { if (intersects[0].object.userData.uiElementInstance === this.activeElement) releasedOverActive = true; } if (typeof this.activeElement.onMouseUp === 'function') this.activeElement.onMouseUp(); if (releasedOverActive && typeof this.activeElement.onClick === 'function') this.activeElement.onClick(); else if (this.menuManager.focusedItem && this.menuManager.focusedItem !== this.activeElement) this.menuManager.focusedItem.setFocus(false); this.activeElement = null; } else { this.raycaster.setFromCamera(this.mouse, this.camera); if(!this.activeMenu || !this.activeMenu.group || !this.activeMenu.group.visible) return; const intersects = this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false); if(intersects.length === 0 && this.menuManager.focusedItem) this.menuManager.focusedItem.setFocus(false); } }
-            _onMouseWheel(event) { /* Stubbed for now */ }
-            dispose() { this.rendererDomElement.removeEventListener('mousemove',this._onMouseMove); this.rendererDomElement.removeEventListener('mousedown',this._onMouseDown); document.removeEventListener('mouseup', this._onMouseUp); this.rendererDomElement.removeEventListener('wheel', this._onMouseWheel); } update(){}
-        }
-        class XRControllerInteractionHandler extends BaseInteractionHandler { update(){} dispose(){} }
+        /**
+         * Handles mouse-based interactions with UI elements.
+         * Uses raycasting to detect hovered and clicked elements.
+         */
+        class MouseInteractionHandler extends BaseInteractionHandler {
+            constructor(rendererDomElement, camera) {
+                super();
+                this.rendererDomElement = rendererDomElement;
+                this.camera = camera;
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2(); // Normalized device coordinates
 
-        function startBlinkingCursor() { stopBlinkingCursor(); cursorVisible = true; if (menuManager.focusedItem && menuManager.focusedItem.type === 'text_input') { menuManager.focusedItem.updateAppearance(menuManager.focusedItem.style.focusBackgroundColor, null, null, cursorVisible); } blinkTimer = setInterval(() => { cursorVisible = !cursorVisible; if (menuManager.focusedItem && menuManager.focusedItem.type === 'text_input' && menuManager.focusedItem.userData.isFocused) { menuManager.focusedItem.updateAppearance(menuManager.focusedItem.style.focusBackgroundColor, null, null, cursorVisible); } else { stopBlinkingCursor(); } }, BLINK_INTERVAL); }
-        function stopBlinkingCursor() { if (blinkTimer) { clearInterval(blinkTimer); blinkTimer = null; } cursorVisible = false; if (menuManager.focusedItem && menuManager.focusedItem.type === 'text_input' && menuManager.focusedItem.userData.isFocused) { menuManager.focusedItem.updateAppearance(menuManager.focusedItem.style.focusBackgroundColor, null, null, false); } }
+                // Bind event handlers to this instance
+                this._onMouseMove = this._onMouseMove.bind(this);
+                this._onMouseDown = this._onMouseDown.bind(this);
+                this._onMouseUp = this._onMouseUp.bind(this);
+                this._onMouseWheel = this._onMouseWheel.bind(this); // Example for future use
 
-        function init() {
-            scene = new THREE.Scene(); scene.background = new THREE.Color(0x222233);
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.5, 4); renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(window.devicePixelRatio);
-            document.body.appendChild(renderer.domElement);
-            controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1.0, 0); controls.update();
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); directionalLight.position.set(5, 10, 7.5); scene.add(directionalLight);
-            // raycaster = new THREE.Raycaster(); // Used by MouseInteractionHandler
-            // mouse = new THREE.Vector2(); // Used by MouseInteractionHandler
-            interactiveElements = []; // Cleared, as elements add their meshes individually. Interaction handler gets meshes from activeMenu.
+                this.rendererDomElement.addEventListener('mousemove', this._onMouseMove);
+                this.rendererDomElement.addEventListener('mousedown', this._onMouseDown);
+                document.addEventListener('mouseup', this._onMouseUp); // Listen on document for mouseup outside canvas
+                this.rendererDomElement.addEventListener('wheel', this._onMouseWheel, { passive: false });
+            }
 
-            const menuRenderer = new ThreeJSRenderer(scene, camera);
-            menuManager = new MenuManager(menuRenderer);
-            const mouseInteractionHandler = new MouseInteractionHandler(renderer.domElement, camera);
-            const xrInteractionHandler = new XRControllerInteractionHandler(/*renderer*/); // XR handler might need renderer or session
-            menuManager.setInteractionHandler(mouseInteractionHandler);
+            _onMouseMove(event) {
+                const rect = this.rendererDomElement.getBoundingClientRect();
+                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-            const vrButton = VRButton.createButton(renderer); document.body.appendChild(vrButton);
-            renderer.xr.enabled = true;
-            renderer.xr.addEventListener('sessionstart', () => { if(controls) controls.enabled = false; if(menuManager) menuManager.setInteractionHandler(xrInteractionHandler);});
-            renderer.xr.addEventListener('sessionend', () => { if(controls) controls.enabled = true; if(menuManager) menuManager.setInteractionHandler(mouseInteractionHandler);});
+                if (!this.activeMenu || !this.activeMenu.group || !this.activeMenu.group.visible || this.activeElement) {
+                    // If no active menu, menu not visible, or an element is already "active" (mouse down),
+                    // skip hover updates or clear hover if necessary.
+                    if(this.hoveredItem && !this.activeElement) { // Clear hover if mouse moves out while not pressing
+                         this.hoveredItem.onUnhover();
+                         this.hoveredItem = null;
+                    }
+                    return;
+                }
 
-            menuManager.registerMenuDefinition(testMenuDefinition);
-            menuManager.registerAction("logNameAction", (item, manager) => {
-                const nameField = manager.activeMenu.items.find(i => i.id === 'nameField');
-                if (nameField) { document.getElementById('info').textContent = `Name: ${nameField.value}`; }
-                else { document.getElementById('info').textContent = `Name field not found.`; }
-            });
-            menuManager.loadMenu('mainTestMenu');
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false);
 
-            window.addEventListener('resize', onWindowResize);
-            window.addEventListener('keydown', (event) => {
-                if (menuManager.focusedItem) {
-                    if (event.key === 'Escape') {
-                        menuManager.focusedItem.setFocus(false);
-                        event.preventDefault();
-                    } else if (typeof menuManager.focusedItem.onKeyDown === 'function') {
-                        menuManager.focusedItem.onKeyDown(event);
+                let currentIntersectedUIElement = null;
+                if (intersects.length > 0) {
+                    currentIntersectedUIElement = intersects[0].object.userData.uiElementInstance;
+                }
+
+                if (this.hoveredItem !== currentIntersectedUIElement) {
+                    if (this.hoveredItem) this.hoveredItem.onUnhover();
+                    this.hoveredItem = currentIntersectedUIElement;
+                    if (this.hoveredItem) this.hoveredItem.onHover();
+                }
+            }
+
+            _onMouseDown(event) {
+                if (!this.activeMenu || !this.activeMenu.group || !this.activeMenu.group.visible) return;
+
+                // Raycast again on mousedown to ensure we're clicking the correct element
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const intersects = this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false);
+
+                if (intersects.length > 0) {
+                    const clickedElement = intersects[0].object.userData.uiElementInstance;
+                    if (clickedElement) {
+                        this.activeElement = clickedElement; // Mark as active (being pressed)
+                        if (typeof clickedElement.onMouseDown === 'function') {
+                            clickedElement.onMouseDown();
+                        }
+                    }
+                } else {
+                    // Clicked outside any UI element, potentially unfocus current
+                    if (this.menuManager && this.menuManager.focusedItem) {
+                        this.menuManager.focusedItem.setFocus(false);
                     }
                 }
-            });
-            renderer.setAnimationLoop(animate);
-            document.getElementById('info').textContent = "Definitive Iteration 0.7: Desktop TextInput.";
+            }
+
+            _onMouseUp(event) {
+                if (this.activeElement) {
+                    // Raycast on mouseup to see if it's released over the same active element
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                     const intersects = (this.activeMenu && this.activeMenu.group && this.activeMenu.group.visible) ?
+                                     this.raycaster.intersectObjects(this.activeMenu.getInteractiveObjects(), false) : [];
+
+
+                    let releasedOverActive = false;
+                    if (intersects.length > 0 && this.activeElement) {
+                        if (intersects[0].object.userData.uiElementInstance === this.activeElement) {
+                            releasedOverActive = true;
+                        }
+                    }
+
+                    if (typeof this.activeElement.onMouseUp === 'function') {
+                        this.activeElement.onMouseUp();
+                    }
+
+                    if (releasedOverActive && typeof this.activeElement.onClick === 'function') {
+                        this.activeElement.onClick(); // Trigger click only if released over the same element
+                    } else if (this.menuManager && this.menuManager.focusedItem && this.menuManager.focusedItem !== this.activeElement) {
+                        // If released elsewhere, and a different item was focused, unfocus it.
+                        // Note: onClick usually handles setting focus. This logic might be redundant or
+                        // for cases where an element is dragged off and released.
+                        // this.menuManager.focusedItem.setFocus(false);
+                    }
+                    this.activeElement = null; // No longer active
+                }
+                // If no activeElement, a click might have happened on empty space.
+                // _onMouseDown handles unfocusing in that case.
+            }
+
+            _onMouseWheel(event) {
+                // Placeholder for scrollable menu interactions
+                // event.preventDefault(); // If handling scroll
+            }
+
+            /** Removes event listeners. */
+            dispose() {
+                super.dispose();
+                this.rendererDomElement.removeEventListener('mousemove', this._onMouseMove);
+                this.rendererDomElement.removeEventListener('mousedown', this._onMouseDown);
+                document.removeEventListener('mouseup', this._onMouseUp);
+                this.rendererDomElement.removeEventListener('wheel', this._onMouseWheel);
+            }
         }
+
+        /**
+         * Placeholder for XR controller-based interactions.
+         * Needs implementation for XR raycasting, selection, etc.
+         */
+        class XRControllerInteractionHandler extends BaseInteractionHandler {
+            constructor(/* renderer, xrSession - potentially needed */) {
+                super();
+                // TODO: Implement XR controller setup (e.g., line pointers, event listeners)
+            }
+
+            update() {
+                // TODO: Implement XR controller raycasting and event dispatching
+                // For example, check controller select events, cast rays from controllers
+            }
+
+            dispose() {
+                super.dispose();
+                // TODO: Clean up XR controller event listeners and objects
+            }
+        }
+
+
+        // --- Helper Functions for UI ---
+
+        /** Starts the blinking cursor animation for focused text inputs. */
+        function startBlinkingCursor() {
+            stopBlinkingCursor(); // Ensure no multiple timers
+            cursorVisible = true;
+            // Initial draw with cursor
+            if (menuManager.focusedItem && menuManager.focusedItem.type === 'text_input') {
+                menuManager.focusedItem.updateAppearance(menuManager.focusedItem.style.focusBackgroundColor, null, null, cursorVisible);
+            }
+
+            blinkTimer = setInterval(() => {
+                cursorVisible = !cursorVisible;
+                if (menuManager.focusedItem && menuManager.focusedItem.type === 'text_input' && menuManager.focusedItem.userData.isFocused) {
+                    menuManager.focusedItem.updateAppearance(menuManager.focusedItem.style.focusBackgroundColor, null, null, cursorVisible);
+                } else {
+                    // If no longer focused or not a text input, stop blinking
+                    stopBlinkingCursor();
+                }
+            }, BLINK_INTERVAL);
+        }
+
+        /** Stops the blinking cursor animation and hides the cursor. */
+        function stopBlinkingCursor() {
+            if (blinkTimer) {
+                clearInterval(blinkTimer);
+                blinkTimer = null;
+            }
+            cursorVisible = false; // Ensure cursor is hidden on stop
+            // Update appearance one last time without cursor if an element was focused
+            if (menuManager.focusedItem && menuManager.focusedItem.type === 'text_input' && menuManager.focusedItem.userData.isFocused) {
+                 menuManager.focusedItem.updateAppearance(menuManager.focusedItem.style.focusBackgroundColor, null, null, false);
+            }
+        }
+
+        // --- Initialization and Main Loop ---
+
+        /** Initializes the 3D scene, camera, renderer, and UI system. */
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222233); // Dark blue-grey background
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.5, 4); // Positioned to view the menu
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            orbitControls = new OrbitControls(camera, renderer.domElement);
+            orbitControls.target.set(0, 1.0, 0); // Target the general area of the UI
+            orbitControls.update();
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Setup UI System
+            const uiRenderer = new ThreeJSRenderer(scene, camera);
+            menuManager = new MenuManager(uiRenderer);
+
+            const mouseHandler = new MouseInteractionHandler(renderer.domElement, camera);
+            const xrHandler = new XRControllerInteractionHandler(/* pass renderer if needed by XR setup */);
+            menuManager.setInteractionHandler(mouseHandler); // Default to mouse
+
+            // VR Button Setup
+            const vrButton = VRButton.createButton(renderer);
+            document.body.appendChild(vrButton);
+            renderer.xr.enabled = true;
+
+            renderer.xr.addEventListener('sessionstart', () => {
+                if (orbitControls) orbitControls.enabled = false;
+                if (menuManager) menuManager.setInteractionHandler(xrHandler);
+            });
+            renderer.xr.addEventListener('sessionend', () => {
+                if (orbitControls) orbitControls.enabled = true;
+                if (menuManager) menuManager.setInteractionHandler(mouseHandler);
+            });
+
+            // Register and load the sample menu
+            menuManager.registerMenuDefinition(sampleMenuDefinition);
+            menuManager.registerAction("submitNameAction", (item, manager) => {
+                const nameField = manager.activeMenu.items.find(i => i.id === 'nameInput');
+                if (nameField) {
+                    document.getElementById('info').textContent = `Submitted Name: ${nameField.value}`;
+                } else {
+                    document.getElementById('info').textContent = `Error: Name input field not found.`;
+                }
+            });
+            menuManager.loadMenu('sampleMenu');
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', onGlobalKeyDown);
+
+            renderer.setAnimationLoop(animate);
+            document.getElementById('info').textContent = "JS-3D-UI Ready. Interact with the menu.";
+        }
+
+        /** Handles window resize events to update camera and renderer. */
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
+
+        /**
+         * Handles global keydown events, primarily for focused UI elements.
+         * @param {KeyboardEvent} event
+         */
+        function onGlobalKeyDown(event) {
+            if (menuManager && menuManager.focusedItem) {
+                if (event.key === 'Escape') {
+                    menuManager.focusedItem.setFocus(false);
+                    event.preventDefault(); // Prevent other Escape key actions
+                } else if (typeof menuManager.focusedItem.onKeyDown === 'function') {
+                    // Pass event to the focused item's specific handler
+                    menuManager.focusedItem.onKeyDown(event);
+                }
+            }
+        }
+
+        /** Main animation loop. */
         function animate() {
-            if(controls && controls.enabled) controls.update(); // Only update if enabled
-            if(menuManager && menuManager.interactionHandler) menuManager.interactionHandler.update();
+            if (orbitControls && orbitControls.enabled) {
+                orbitControls.update();
+            }
+            if (menuManager) {
+                menuManager.update(); // Updates interaction handlers
+            }
             renderer.render(scene, camera);
         }
+
+        // Start the application
         init();
     </script>
 </body>
